@@ -1,0 +1,74 @@
+pipeline {
+    agent none
+
+    stages {
+        stage('GetCode') {
+            agent { label 'agent1' }
+            steps {
+                cleanWs()
+                git 'https://github.com/mjazo/unir-todo-aws.git'
+                sh '''
+                    whoami
+                    hostname
+                    echo $WORKSPACE
+                    ls -la
+                '''
+                stash includes: '**/*', name: 'source'
+            }
+        }
+        stage('StaticTest') {
+            agent { label 'agent2' }
+            steps {
+                unstash 'source'
+                sh '''
+                    whoami
+                    hostname
+                    echo $WORKSPACE
+                    python3 -m flake8 --format=pylint --exit-zero src > flake8.out
+                    python3 -m bandit --exit-zero -r ./src -f custom -o bandit.out --msg-template "{abspath}:{line}: {severity}: {test_id}: {msg}"
+                '''
+                recordIssues tools: [flake8(name: 'Flake8', pattern: 'flake8.out'),pyLint(name: 'Bandit', pattern: 'bandit.out')]
+            }
+        }
+        stage('Deploy') {
+            agent any
+            steps {
+                unstash 'source'
+                sh '''
+                    whoami
+                    hostname
+                    echo $WORKSPACE
+
+                    export PATH="/usr/bin:$PATH"
+                    export PYTHONPATH="/usr/bin/python3.10"
+                    sam build
+                    sam validate --region=us-east-1
+                    sam deploy --config-env production --force-upload --no-fail-on-empty-changeset
+                '''
+                script {
+                    def baseUrl = sh(script: '''
+                        BASE_URL=$(aws cloudformation describe-stacks --stack-name todo-list-aws-production --query "Stacks[0].Outputs[0].OutputValue" --output text)
+                        echo $BASE_URL
+                    ''', returnStdout: true).trim()
+
+                    env.BASE_URL = baseUrl
+                }
+            }
+        }
+        stage('RestTest') {
+            agent { label 'agent3' }
+            steps {
+                unstash 'source'
+                sh '''
+                    whoami
+                    hostname
+                    echo $WORKSPACE
+
+                    sleep 15
+
+                    python3 -m pytest -s test/integration/todoApiTest.py
+                '''
+            }
+        }
+    }
+}
