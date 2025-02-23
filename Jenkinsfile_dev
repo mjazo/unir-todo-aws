@@ -8,6 +8,10 @@ pipeline {
                 git branch: 'develop', url: 'https://github.com/mjazo/unir-todo-aws.git'
                 sh '''
                     ls -la
+
+                    wget -O samconfig.toml https://raw.githubusercontent.com/mjazo/unir-todo-list-aws-config/staging/samconfig.toml
+
+                    cat samconfig.toml
                 '''
             }
         }
