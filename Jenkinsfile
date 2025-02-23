@@ -57,6 +57,9 @@ pipeline {
                         git config --global user.email "mjazo@petroil.com.mx"
                         git config --global user.name "Efrain Jazo Guevara"
 
+                        # Para que no haya conflicto con el Jenkinsfile
+                        git config --global merge.ours.driver true
+
                         git checkout master
                         git merge develop
 
