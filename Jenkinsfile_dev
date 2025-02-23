@@ -5,7 +5,7 @@ pipeline {
         stage('GetCode') {
             steps {
                 cleanWs()
-                git branch: 'develop', url: 'https://github.com/mjazo/unir-todo-aws'
+                git branch: 'develop', url: 'https://github.com/mjazo/unir-todo-aws.git'
                 sh '''
                     ls -la
                 '''
@@ -38,30 +38,34 @@ pipeline {
 
                     export BASE_URL
 
+                    sleep 15
+
                     python3 -m pytest -s test/integration/todoApiTest.py
                 '''
             }
         }
         stage('Promote') {
             steps {
-                sh '''
+                withCredentials([string(credentialsId: 'github-token', variable: 'GIT_TOKEN')]) {
+                    sh '''
 
-                    set -e
-                    git config --global user.email "mjazo@petroil.com.mx"
-                    git config --global user.name "Efrain Jazo Guevara"
+                        set -e
+                        git config --global user.email "mjazo@petroil.com.mx"
+                        git config --global user.name "Efrain Jazo Guevara"
 
-                    git checkout master
-                    git merge develop
+                        git checkout master
+                        git merge develop
 
-                    latest_version=$(grep -oP '(?<=## \\[)[0-9]+\\.[0-9]+\\.[0-9]+(?=\\])' CHANGELOG.md | head -1)
-                    new_version=$(echo $latest_version | awk -F. '{$NF += 1; print $1"."$2"."$3}')
+                        latest_version=$(grep -oP '(?<=## \\[)[0-9]+\\.[0-9]+\\.[0-9]+(?=\\])' CHANGELOG.md | head -1)
+                        new_version=$(echo $latest_version | awk -F. '{$NF += 1; print $1"."$2"."$3}')
 
-                    echo -e "\n## [$new_version] - $(date +%Y-%m-%d)\n### Added\n- Promover deploy." >> CHANGELOG.md
+                        echo -e "\n## [$new_version] - $(date +%Y-%m-%d)\n### Added\n- Promover deploy." >> CHANGELOG.md
 
-                    git add CHANGELOG.md
-                    git commit -m "chore(release): \$new_version"
-                    git push origin master
-                '''
+                        git add CHANGELOG.md
+                        git commit -m "chore(release): \$new_version"
+                        git push https://x-access-token:\$GIT_TOKEN@github.com/mjazo/unir-todo-aws.git master
+                    '''
+                }
             }
         }
     }

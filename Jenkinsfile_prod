@@ -5,7 +5,7 @@ pipeline {
         stage('GetCode') {
             steps {
                 cleanWs()
-                git 'https://github.com/mjazo/unir-todo-aws'
+                git 'https://github.com/mjazo/unir-todo-aws.git'
                 sh '''
                     ls -la
                 '''
@@ -37,6 +37,8 @@ pipeline {
                     BASE_URL=$(aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query "Stacks[0].Outputs[0].OutputValue" --output text)
 
                     export BASE_URL
+
+                    sleep 15
 
                     python3 -m pytest -s test/integration/todoApiTest.py
                 '''
