@@ -1,0 +1,76 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('GetCode') {
+            steps {
+                cleanWs()
+                git branch: 'develop', url: 'https://github.com/mjazo/unir-todo-aws.git'
+                sh '''
+                    ls -la
+
+                    wget -O samconfig.toml https://raw.githubusercontent.com/mjazo/unir-todo-list-aws-config/staging/samconfig.toml
+
+                    cat samconfig.toml
+                '''
+            }
+        }
+        stage('StaticTest') {
+            steps {
+                sh '''
+                    python3 -m flake8 --format=pylint --exit-zero src > flake8.out
+                    python3 -m bandit --exit-zero -r ./src -f custom -o bandit.out --msg-template "{abspath}:{line}: {severity}: {test_id}: {msg}"
+                '''
+                recordIssues tools: [flake8(name: 'Flake8', pattern: 'flake8.out'),pyLint(name: 'Bandit', pattern: 'bandit.out')]
+            }
+        }
+        stage('Deploy') {
+            steps {
+                sh '''
+                    export PATH="/usr/bin:$PATH"
+                    export PYTHONPATH="/usr/bin/python3.10"
+                    sam build
+                    sam validate --region=us-east-1
+                    sam deploy --config-env staging --force-upload --no-fail-on-empty-changeset
+                '''
+            }
+        }
+        stage('RestTest') {
+            steps {
+                sh '''
+                    BASE_URL=$(aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query "Stacks[0].Outputs[0].OutputValue" --output text)
+
+                    export BASE_URL
+
+                    sleep 15
+
+                    python3 -m pytest -s test/integration/todoApiTest.py
+                '''
+            }
+        }
+        stage('Promote') {
+            steps {
+                withCredentials([string(credentialsId: 'github-token', variable: 'GIT_TOKEN')]) {
+                    sh '''
+
+                        set -e
+                        git config --global user.email "mjazo@petroil.com.mx"
+                        git config --global user.name "Efrain Jazo Guevara"
+
+                        git checkout master
+                        git merge develop
+
+                        latest_version=$(grep -oP '(?<=## \\[)[0-9]+\\.[0-9]+\\.[0-9]+(?=\\])' CHANGELOG.md | head -1)
+                        new_version=$(echo $latest_version | awk -F. '{$NF += 1; print $1"."$2"."$3}')
+
+                        echo -e "\n## [$new_version] - $(date +%Y-%m-%d)\n### Added\n- Promover deploy." >> CHANGELOG.md
+
+                        git add CHANGELOG.md
+                        git commit -m "chore(release): \$new_version"
+                        git push https://x-access-token:\$GIT_TOKEN@github.com/mjazo/unir-todo-aws.git master
+                    '''
+                }
+            }
+        }
+    }
+}
