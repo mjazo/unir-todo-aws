@@ -34,7 +34,7 @@ pipeline {
         stage('RestTest') {
             steps {
                 sh '''
-                    BASE_URL=$(aws cloudformation describe-stacks --stack-name todo-list-aws-staging --query "Stacks[0].Outputs[0].OutputValue" --output text)
+                    BASE_URL=$(aws cloudformation describe-stacks --stack-name todo-list-aws-production --query "Stacks[0].Outputs[0].OutputValue" --output text)
 
                     export BASE_URL
 
